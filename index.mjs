@@ -5,6 +5,8 @@ import rateLimit from "express-rate-limit";
 import RedisStore from "rate-limit-redis";
 import { RedisConnection } from "./configurations/redis.configuration.mjs";
 import { createProxyMiddleware } from "http-proxy-middleware";
+import { authRouter } from "./routes/ms-authentication.route.mjs";
+import { otpRouter } from "./routes/otp.route.mjs";
 
 const app = express();
 const PORT = config.PORT;
@@ -31,8 +33,6 @@ const apiRateLimiter = rateLimit({
   },
 });
 
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: "*",
@@ -67,96 +67,29 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(
-  "/api/auth/register",
-  createProxyMiddleware({
-    target: "http://localhost:8001/api/auth-service/users",
-    changeOrigin: true,
-    pathRewrite: { "^/api/auth/register": "" },
-    selfHandleResponse: false,
-  })
-);
+app.use("/api/auth", authRouter);
+app.use("/api/otp", otpRouter);
 
-app.use(
-  "/api/auth/login",
-  createProxyMiddleware({
-    target: "http://localhost:8001/api/auth-service/users/login",
-    changeOrigin: true,
-    pathRewrite: { "^/api/auth/login": "" },
-    selfHandleResponse: false,
-  })
-);
+app.use((req, res, next) => {
+  const error = new Error(
+    `Page not found or method not allowed on ${req.originalUrl}`
+  );
+  error.status = 404;
+  next(error);
+});
 
-app.use(
-  "/api/auth/get-user",
-  createProxyMiddleware({
-    target: "http://localhost:8001/api/auth-service/users",
-    changeOrigin: true,
-    pathRewrite: { "^/api/auth/get-user": "" },
-    selfHandleResponse: false,
-  })
-);
+app.use(async (err, req, res, next) => {
+  console.error({ url: req.url, err, body: req.body, file: req.file });
 
-app.use(
-  "/api/auth/update-user",
-  createProxyMiddleware({
-    target: "http://localhost:8001/api/auth-service/users",
-    changeOrigin: true,
-    pathRewrite: { "^/api/auth/get-user": "" },
-    selfHandleResponse: false,
-  })
-);
+  const statusCode = err.status || 500;
+  const message = err.message || "Internal Server Error";
 
-app.use(
-  "/api/auth/callback",
-  createProxyMiddleware({
-    target: "http://localhost:8001/api/auth-service/users/get-token",
-    changeOrigin: true,
-    pathRewrite: { "^/api/auth/callback": "" },
-    selfHandleResponse: false,
-  })
-);
-
-app.use(
-  "/api/otp/generate",
-  createProxyMiddleware({
-    target: "http://localhost:8001/api/auth-service/otp/generate",
-    changeOrigin: true,
-    pathRewrite: { "^/api/otp/generate": "" },
-    selfHandleResponse: false,
-  })
-);
-
-app.use(
-  "/api/otp/verify",
-  createProxyMiddleware({
-    target: "http://localhost:8001/api/auth-service/otp/verify",
-    changeOrigin: true,
-    pathRewrite: { "^/api/otp/verify": "" },
-    selfHandleResponse: false,
-  })
-);
-
-// app.use((req, res, next) => {
-//   const error = new Error(
-//     `Page not found or method not allowed on ${req.originalUrl}`
-//   );
-//   error.status = 404;
-//   next(error);
-// });
-
-// app.use(async (err, req, res, next) => {
-//   console.error({ url: req.url, err, body: req.body, file: req.file });
-
-//   const statusCode = err.status || 500;
-//   const message = err.message || "Internal Server Error";
-
-//   res.status(+statusCode).json({
-//     status: false,
-//     code: +statusCode,
-//     error: message,
-//   });
-// });
+  res.status(+statusCode).json({
+    status: false,
+    code: +statusCode,
+    error: message,
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`App is listening on PORT: ${PORT}`);
